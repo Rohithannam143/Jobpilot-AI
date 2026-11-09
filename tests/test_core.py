@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from datetime import timedelta
 from pathlib import Path
 
 from app import main
@@ -26,12 +27,16 @@ class JobPilotCoreTests(unittest.TestCase):
 
     def test_profile_is_saved_and_used_for_matching(self):
         profile = main.update_profile({
+            "full_name": "Test Candidate",
+            "linkedin_url": "https://www.linkedin.com/in/test-candidate",
             "skills": ["python", "react"],
             "target_roles": ["python developer"],
             "preferred_location": "Hyderabad",
             "paid_internships_only": True,
         })
         self.assertEqual(profile["skills"], ["python", "react"])
+        self.assertEqual(profile["full_name"], "Test Candidate")
+        self.assertTrue(profile["linkedin_url"].startswith("https://"))
         score, reasons = main.score_listing({
             "title": "Python Developer Intern",
             "description": "Python and React development",
@@ -59,6 +64,36 @@ class JobPilotCoreTests(unittest.TestCase):
         })
         self.assertTrue(main.save_listing(item))
         self.assertFalse(main.save_listing(item))
+
+    def test_application_create_update_and_delete(self):
+        item = main.create_application(main.ApplicationCreate(
+            company="Example Ltd", role="Python Developer",
+            platform="LinkedIn", status="Applied",
+            url="https://example.com/jobs/1"
+        ))
+        self.assertEqual(item["status"], "Applied")
+        updated = main.edit_application(item["id"], main.ApplicationUpdate(status="Interview"))
+        self.assertEqual(updated["status"], "Interview")
+        self.assertEqual(len(main.application_activity(item["id"])), 2)
+        self.assertTrue(main.delete_application(item["id"])["deleted"])
+        self.assertEqual(main.list_applications(), [])
+
+    def test_memory_cleanup_only_removes_old_events(self):
+        item = main.create_application(main.ApplicationCreate(
+            company="Example Ltd", role="QA Intern", platform="Other"
+        ))
+        old_date = (main.utc_now() - timedelta(days=21)).isoformat()
+        with main.connect() as conn:
+            conn.execute("UPDATE application_events SET created_at=?", (old_date,))
+            conn.commit()
+        result = main.run_retention_cleanup(force=True)
+        self.assertEqual(result["deleted_events"], 1)
+        self.assertEqual(len(main.list_applications()), 1)
+        self.assertEqual(main.application_activity(item["id"]), [])
+
+    def test_memory_can_be_disabled(self):
+        result = main.update_memory(main.MemorySettings(enabled=False))
+        self.assertFalse(result["enabled"])
 
 
 if __name__ == "__main__":
