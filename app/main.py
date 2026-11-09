@@ -319,6 +319,11 @@ def normalize_listing(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def normalize(row: dict[str, Any]) -> dict[str, Any]:
+    """Backward-compatible alias for CSV listing normalization."""
+    return normalize_listing(row)
+
+
 def save_listing(item: dict[str, Any]) -> bool:
     with closing(connect()) as conn:
         cur = conn.execute("""INSERT OR IGNORE INTO listings
@@ -424,8 +429,11 @@ async def import_csv(file: UploadFile = File(...)) -> JSONResponse:
         for raw_row in reader:
             row = {str(k).strip().lower(): v for k, v in raw_row.items() if k}
             try:
-                inserted += int(save_listing(normalize_listing(row)))
-                skipped += 0 if inserted else 1
+                was_inserted = save_listing(normalize_listing(row))
+                if was_inserted:
+                    inserted += 1
+                else:
+                    skipped += 1
             except ValueError:
                 skipped += 1
         return JSONResponse({"inserted": inserted, "skipped": skipped})
