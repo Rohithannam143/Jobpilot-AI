@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JobPilot AI</title>
+<style>
+:root{color-scheme:dark;--bg:#0b1020;--panel:#121a2d;--line:#26334d;--text:#e8eefb;--muted:#9aabc5;--accent:#7c9cff}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 Inter,system-ui,sans-serif}
+main{max-width:1150px;margin:auto;padding:32px 20px}.top{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
+h1{margin:0;font-size:30px}.muted{color:var(--muted)}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:24px 0}
+.panel,.stat,.job{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px}.stat b{display:block;font-size:25px}
+.filters{display:flex;gap:10px;flex-wrap:wrap;margin:18px 0}.filters input,.filters select,button{background:#0e1628;color:var(--text);border:1px solid var(--line);border-radius:9px;padding:11px}
+button{cursor:pointer;background:#24365e;border-color:#405b96}.jobs{display:grid;gap:12px}.jobhead{display:flex;justify-content:space-between;gap:12px}.job h3{margin:0 0 4px}.pill{font-size:12px;color:#c6d5ff;border:1px solid #405b96;border-radius:30px;padding:3px 8px}
+a{color:#a9c0ff}.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px}
+@media(max-width:650px){.stats{grid-template-columns:repeat(2,1fr)}}
+</style></head>
+<body><main>
+<div class="top"><div><h1>JobPilot AI</h1><div class="muted">Your job & internship discovery workspace</div></div>
+<form id="upload"><input type="file" name="file" accept=".csv" required><button>Import CSV</button></form></div>
+<div class="stats"><div class="stat"><span class="muted">Listings</span><b id="total">0</b></div><div class="stat"><span class="muted">Paid internships</span><b id="paid">0</b></div><div class="stat"><span class="muted">Applied</span><b id="applied">0</b></div><div class="stat"><span class="muted">Interviews</span><b id="interviews">0</b></div></div>
+<div class="panel"><div class="filters"><input id="q" placeholder="Search roles or companies"><input id="location" placeholder="Location (e.g. Hyderabad)"><label><input type="checkbox" id="paidOnly"> Paid internships only</label><button onclick="loadJobs()">Search</button></div><div class="muted" id="message">Import a CSV to get started.</div></div>
+<div class="jobs" id="jobs" style="margin-top:14px"></div>
+</main>
+<script>
+async function loadStats(){const s=await fetch('/api/stats').then(r=>r.json());for(const [k,v] of Object.entries(s)){const el=document.getElementById(k);if(el)el.textContent=v}}
+async function loadJobs(){const p=new URLSearchParams({q:document.getElementById('q').value,location:document.getElementById('location').value,paid_only:document.getElementById('paidOnly').checked});const data=await fetch('/api/listings?'+p).then(r=>r.json());const root=document.getElementById('jobs');root.innerHTML='';document.getElementById('message').textContent=data.length+' matching listings';
+for(const j of data){const card=document.createElement('article');card.className='job';const title=document.createElement('h3');title.textContent=j.title;const company=document.createElement('div');company.className='muted';company.textContent=[j.company,j.platform,j.location].filter(Boolean).join(' · ');const score=document.createElement('span');score.className='pill';score.textContent='Match '+j.match_score+'%';const status=document.createElement('select');for(const s of ['saved','preparing','applied','interview','rejected','offer']){const o=document.createElement('option');o.value=s;o.textContent=s;o.selected=s===j.status;status.append(o)}status.onchange=async()=>{const fd=new FormData();fd.append('status',status.value);await fetch('/api/listings/'+j.id+'/status',{method:'PATCH',body:fd});loadStats()};const row=document.createElement('div');row.className='row';row.append(score,status);if(j.url){const link=document.createElement('a');link.href=j.url;link.target='_blank';link.rel='noopener noreferrer';link.textContent='Open listing';row.append(link)}if(j.stipend>0){const stipend=document.createElement('span');stipend.className='pill';stipend.textContent='₹'+j.stipend+'/month';row.append(stipend)}card.append(title,company,row);root.append(card)}}
+document.getElementById('upload').onsubmit=async e=>{e.preventDefault();const fd=new FormData(e.target);const r=await fetch('/api/import',{method:'POST',body:fd});const d=await r.json();document.getElementById('message').textContent=r.ok?'Imported '+d.inserted+'; skipped '+d.skipped:(d.detail||'Import failed');loadStats();loadJobs()};
+loadStats();loadJobs();
+</script></body></html>
