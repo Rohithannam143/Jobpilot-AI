@@ -199,6 +199,12 @@ def startup() -> None:
     run_retention_cleanup()
 
 
+@app.middleware("http")
+async def daily_retention_check(request, call_next):
+    run_retention_cleanup()
+    return await call_next(request)
+
+
 def get_profile() -> dict[str, Any]:
     with closing(connect()) as conn:
         row = conn.execute("SELECT * FROM candidate_profile WHERE id=1").fetchone()
