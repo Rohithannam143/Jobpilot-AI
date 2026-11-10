@@ -56,7 +56,6 @@ def source_status(db_path: str) -> list[dict[str,Any]]:
         configured=bool(d["feed_url"] or (d["board_type"] and d["board_token"]))
         d.update({"enabled":bool(d["enabled"]),"configured":configured,
                   "mode":base["mode"],"kind":base["kind"],"note":base["note"]})
-        d.pop("board_token",None)
         out.append(d)
     return out
 
