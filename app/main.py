@@ -17,6 +17,8 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
 from pypdf import PdfReader
+from apscheduler.schedulers.background import BackgroundScheduler
+from app.discovery import init_discovery, source_status, configure_source, run_discovery, run_history
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = Path(os.getenv("JOBPILOT_DATA_DIR", BASE_DIR / "data"))
@@ -196,7 +198,16 @@ def run_retention_cleanup(force: bool = False) -> dict[str, Any]:
 @app.on_event("startup")
 def startup() -> None:
     init_db()
+    init_discovery(str(DB_PATH))
     run_retention_cleanup()
+    if os.getenv("JOBPILOT_DISCOVERY_ENABLED", "true").lower() == "true":
+        scheduler = BackgroundScheduler(timezone="UTC")
+        scheduler.add_job(lambda: run_discovery(str(DB_PATH), normalize_listing, save_listing),
+                          "interval", hours=max(1, int(os.getenv("JOBPILOT_DISCOVERY_INTERVAL_HOURS", "6"))),
+                          id="job-discovery", replace_existing=True, max_instances=1,
+                          next_run_time=datetime.now(timezone.utc))
+        scheduler.start()
+        app.state.discovery_scheduler = scheduler
 
 
 @app.middleware("http")
@@ -599,3 +610,33 @@ def stats() -> dict[str, int]:
         rejected = conn.execute("SELECT COUNT(*) FROM applications WHERE status='Rejected'").fetchone()[0]
     return {"listings": listing_total, "applications": app_total, "applied": applied,
             "interviews": interviews, "selected": selected, "rejected": rejected}
+
+
+class DiscoverySourceUpdate(BaseModel):
+    enabled: bool = True
+    feed_url: str = ""
+    board_type: str = ""
+    board_token: str = ""
+
+
+@app.get("/api/discovery/sources")
+def discovery_sources() -> list[dict[str, Any]]:
+    return source_status(str(DB_PATH))
+
+
+@app.put("/api/discovery/sources/{source_id}")
+def update_discovery_source(source_id: str, payload: DiscoverySourceUpdate) -> dict[str, Any]:
+    try:
+        return configure_source(str(DB_PATH), source_id, payload.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/api/discovery/run")
+def trigger_discovery() -> dict[str, Any]:
+    return run_discovery(str(DB_PATH), normalize_listing, save_listing)
+
+
+@app.get("/api/discovery/runs")
+def discovery_runs(limit: int = 20) -> list[dict[str, Any]]:
+    return run_history(str(DB_PATH), limit)

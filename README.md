@@ -8,7 +8,8 @@ A responsive career command center for organizing job discovery, candidate detai
 - **Application tracker:** add, edit, filter and delete applications by company, role, platform, date, URL, status and notes.
 - **Candidate profile:** personal details, professional headline, LinkedIn and portfolio links, skills, target roles and location preferences.
 - **Resume parsing:** PDF, DOCX and TXT text extraction with curated technology-skill detection.
-- **Job discovery:** CSV listing import, deduplication, filters and explainable skill/role/location matching.
+- **Job discovery:** CSV import plus scheduled multi-source discovery, deduplication, filters and explainable skill/role/location matching.
+- **Automation center:** eight configurable source adapters, six-hour scheduled scans, manual scan trigger, run history and source health.
 - **Job memory:** optional 20-day cleanup of expired internal activity-history events.
 - **Privacy:** original resume files are processed in memory and are not saved.
 
@@ -47,6 +48,10 @@ For paid internships, stipend must be a positive numeric amount. Missing or unkn
 - \`GET/PUT /api/profile\`
 - \`POST /api/resume\`
 - \`GET /api/listings\`
+- \`GET /api/discovery/sources\`
+- \`PUT /api/discovery/sources/{source_id}\`
+- \`POST /api/discovery/run\`
+- \`GET /api/discovery/runs\`
 - \`POST /api/import\`
 - \`GET/POST /api/applications\`
 - \`PATCH/DELETE /api/applications/{id}\`
@@ -58,7 +63,10 @@ For paid internships, stipend must be a positive numeric amount. Missing or unkn
 
 ## Important limitations and production checklist
 
-- Live job-board search and automatic external application submission are not implemented. Use permitted official APIs/feeds or user-authorized workflows and follow each platform's terms, authentication and rate limits.
+- Discovery scans run every 6 hours by default (set \`JOBPILOT_DISCOVERY_INTERVAL_HOURS\`; disable with \`JOBPILOT_DISCOVERY_ENABLED=false\`). A scan runs at startup too.
+- LinkedIn, Naukri, Indeed and Glassdoor are registered as sources but require an approved integration or permitted feed before they can be scanned. Internshala, Foundit and Freshersworld also require a feed URL where no public supported API is configured. No source is represented as active until configured.
+- Company career discovery supports public Greenhouse and Lever board identifiers plus HTTPS RSS/Atom feeds. Configure sources in the Automation page or through the discovery API.
+- This release discovers and ranks listings; it does not submit job applications. External application submission requires an approved integration, candidate-authorized account connection and truthful candidate-specific answers. CAPTCHA/OTP and anti-bot controls are never bypassed.
 - CAPTCHA or OTP protections must never be bypassed. Applicants should review applications and answers before submission.
 - Skill detection uses a curated vocabulary and should be reviewed by the candidate.
 - Scanned/image-only PDFs require OCR before text can be extracted.
